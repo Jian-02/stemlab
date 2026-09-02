@@ -220,3 +220,7 @@ stemlab/
 - [python-audio-separator](https://github.com/nomadkaraoke/python-audio-separator) / UVR 커뮤니티 모델
 - [Basic Pitch](https://github.com/spotify/basic-pitch) — Spotify, Apache-2.0
 - [music21](https://github.com/cuthbertLab/music21) — MIT / BSD
+
+## 라이선스
+
+MIT License — [LICENSE](LICENSE) 참고.
