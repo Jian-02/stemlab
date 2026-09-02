@@ -9,12 +9,14 @@ mp4 등 영상 파일의 오디오 트랙을 다른 mp3(또는 다른 오디오 
 사전 준비:
     ffmpeg가 설치되어 있어야 합니다 (extract_mp3.py와 동일).
 
+결과물은 기본적으로 이 스크립트 옆의 build/ 폴더에 저장됩니다 (-o 로 바꿀 수 있음).
+
 사용법:
     # 기본: video.mp4의 오디오를 new_audio.mp3로 교체 (비디오 화질 그대로,
-    # 오디오는 320kbps AAC로 인코딩 -> output.mp4)
+    # 오디오는 320kbps AAC로 인코딩 -> build/video_replaced.mp4)
     python replace_audio.py video.mp4 new_audio.mp3
 
-    # 출력 파일명 지정
+    # 출력 파일명 직접 지정
     python replace_audio.py video.mp4 new_audio.mp3 -o result.mp4
 
     # 영상 길이와 오디오 길이가 다를 때, 더 짧은 쪽 길이에 맞춰 자르기
@@ -37,6 +39,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+# 결과물은 기본적으로 이 폴더에 저장합니다 (-o 로 바꿀 수 있음).
+BUILD_DIR = BASE_DIR / "build"
 
 
 def check_ffmpeg():
@@ -76,7 +82,8 @@ def main():
     )
     parser.add_argument("video", help="원본 영상 파일 (mp4 등)")
     parser.add_argument("audio", help="새로 넣을 오디오 파일 (mp3 등)")
-    parser.add_argument("-o", "--output", help="출력 파일 경로 (기본: <원본이름>_replaced.mp4)")
+    parser.add_argument("-o", "--output",
+                         help="출력 파일 경로 (기본: build/<원본이름>_replaced.mp4)")
     parser.add_argument("--video-codec", default="copy",
                          help="비디오 코덱 (기본: copy = 재인코딩 없음, 화질 그대로)")
     parser.add_argument("--crf", default="18",
@@ -102,7 +109,11 @@ def main():
     if not audio.is_file():
         sys.exit(f"[오류] 오디오 파일을 찾을 수 없습니다: {audio}")
 
-    output = Path(args.output) if args.output else video.with_name(f"{video.stem}_replaced.mp4")
+    if args.output:
+        output = Path(args.output)
+    else:
+        BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        output = BUILD_DIR / f"{video.stem}_replaced.mp4"
 
     # 길이 비교 (참고용 경고 메시지)
     v_dur = get_duration(video)

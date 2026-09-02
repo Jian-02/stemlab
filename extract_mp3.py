@@ -13,11 +13,14 @@ mp4 등 동영상 파일에서 오디오만 뽑아 mp3로 저장하는 스크립
     - macOS: `brew install ffmpeg`
     - Linux: `sudo apt install ffmpeg` (배포판에 따라 다름)
 
+결과물은 기본적으로 이 스크립트 옆의 build/ 폴더에 저장됩니다
+(-o 또는 --outdir 로 위치를 바꿀 수 있습니다).
+
 사용법:
-    # 파일 하나 변환 (기본: 320kbps CBR, 최고 음질)
+    # 파일 하나 변환 (기본: 320kbps CBR, 최고 음질) -> build/input.mp3
     python extract_mp3.py input.mp4
 
-    # 출력 파일명 지정
+    # 출력 파일명 직접 지정
     python extract_mp3.py input.mp4 -o output.mp3
 
     # VBR 최고 품질(-q:a 0, 대략 220~260kbps 가변)로 변환
@@ -26,7 +29,8 @@ mp4 등 동영상 파일에서 오디오만 뽑아 mp3로 저장하는 스크립
     # 비트레이트 직접 지정 (예: 192k)
     python extract_mp3.py input.mp4 -b 192k
 
-    # 폴더 안의 모든 동영상 파일 일괄 변환
+    # 폴더 안의 모든 동영상 파일 일괄 변환 (기본 결과 폴더: build/)
+    python extract_mp3.py --batch ./videos
     python extract_mp3.py --batch ./videos --outdir ./mp3s
 
     # 원본이 이미 mp3/AAC 등이라 손실 없이 오디오 스트림만 뽑고 싶을 때
@@ -39,6 +43,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+# 변환 결과물은 기본적으로 이 폴더에 모읍니다 (-o / --outdir 로 바꿀 수 있음).
+BUILD_DIR = BASE_DIR / "build"
 
 VIDEO_EXTS = {
     ".mp4", ".mov", ".mkv", ".avi", ".webm", ".flv",
@@ -102,7 +110,7 @@ def convert_one(src: Path, dst: Path, bitrate: str, vbr: bool, copy: bool, overw
 def main():
     parser = argparse.ArgumentParser(description="동영상 파일에서 오디오(mp3)만 추출합니다.")
     parser.add_argument("input", nargs="?", help="변환할 입력 파일 경로")
-    parser.add_argument("-o", "--output", help="출력 파일 경로 (기본: 입력 파일명.mp3)")
+    parser.add_argument("-o", "--output", help="출력 파일 경로 (기본: build/입력파일명.mp3)")
     parser.add_argument("-b", "--bitrate", default="320k",
                          help="mp3 비트레이트 (기본: 320k, mp3 규격상 최대치)")
     parser.add_argument("--vbr", action="store_true",
@@ -111,7 +119,8 @@ def main():
                          help="재인코딩 없이 오디오 스트림만 그대로 추출 (완전 무손실, "
                               "출력 확장자는 원본 오디오 코덱에 맞춰 지정 권장 예: .m4a)")
     parser.add_argument("--batch", metavar="DIR", help="폴더 내 모든 동영상 파일을 일괄 변환")
-    parser.add_argument("--outdir", metavar="DIR", help="--batch 사용 시 결과를 저장할 폴더")
+    parser.add_argument("--outdir", metavar="DIR",
+                         help="--batch 사용 시 결과를 저장할 폴더 (기본: build/)")
     parser.add_argument("--no-overwrite", action="store_true",
                          help="출력 파일이 이미 있으면 건너뛰기")
 
@@ -125,7 +134,7 @@ def main():
         if not src_dir.is_dir():
             sys.exit(f"[오류] 폴더를 찾을 수 없습니다: {src_dir}")
 
-        out_dir = Path(args.outdir) if args.outdir else src_dir
+        out_dir = Path(args.outdir) if args.outdir else BUILD_DIR
         out_dir.mkdir(parents=True, exist_ok=True)
 
         files = [p for p in sorted(src_dir.iterdir()) if p.suffix.lower() in VIDEO_EXTS]
@@ -150,7 +159,11 @@ def main():
     if not src.is_file():
         sys.exit(f"[오류] 파일을 찾을 수 없습니다: {src}")
 
-    dst = Path(args.output) if args.output else src.with_suffix(f".{ext}")
+    if args.output:
+        dst = Path(args.output)
+    else:
+        BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        dst = BUILD_DIR / f"{src.stem}.{ext}"
     convert_one(src, dst, args.bitrate, args.vbr, args.copy,
                 overwrite=not args.no_overwrite)
 

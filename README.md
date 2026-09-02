@@ -123,13 +123,17 @@ python app.py
 
 각 스크립트는 웹앱 없이 단독으로도 쓸 수 있습니다. `-h` 로 전체 옵션을 볼 수 있습니다.
 
-### MP4 → MP3 추출
+`extract_mp3.py` 와 `replace_audio.py` 의 결과물은 기본적으로 **`build/` 폴더**에
+저장됩니다 (`-o` / `--outdir` 로 위치 변경 가능). `build/` 는 `.gitignore` 처리되어
+있습니다.
+
+### MP4 → MP3 추출  (결과: `build/`)
 
 ```bash
-python extract_mp3.py input.mp4                    # 320kbps CBR
+python extract_mp3.py input.mp4                    # -> build/input.mp3 (320kbps CBR)
 python extract_mp3.py input.mp4 --vbr              # 최고 품질 VBR
 python extract_mp3.py input.mp4 --copy -o out.m4a  # 재인코딩 없이 무손실 추출
-python extract_mp3.py --batch ./videos --outdir ./mp3s   # 폴더 일괄 변환
+python extract_mp3.py --batch ./videos            # 폴더 일괄 변환 -> build/
 ```
 
 ### 악기별 스템 분리
@@ -164,10 +168,10 @@ python transcribe_vocal.py vocals.mp3 --tempo 96              # 템포 직접 �
 
 자동 채보는 초안입니다 — 화음·랩·미분음에 약하고, 결과 악보는 사람이 다듬어야 합니다.
 
-### 영상 오디오 갈아끼우기
+### 영상 오디오 갈아끼우기  (결과: `build/`)
 
 ```bash
-python replace_audio.py video.mp4 new_audio.mp3               # 비디오 화질 그대로, 오디오 AAC 320k
+python replace_audio.py video.mp4 new_audio.mp3               # -> build/video_replaced.mp4 (비디오 화질 그대로, 오디오 AAC 320k)
 python replace_audio.py video.mp4 new_audio.mp3 --shortest    # 길이 다르면 짧은 쪽에 맞춤
 python replace_audio.py video.mp4 new_audio.mp3 -o result.mp4
 ```
@@ -187,10 +191,11 @@ stemlab/
 ├── requirements.txt
 ├── requirements-transcribe.txt # 자동 채보용 (basic-pitch 제외)
 ├── templates/index.html        # 웹앱 프론트엔드
-├── backing_models/             # 백코러스 분리 모델 가중치 캐시 (자동 다운로드)
-├── uploads/<작업ID>/           # 웹앱 업로드 원본
-├── separated/<작업ID>/         # 웹앱 분리 결과
-└── jobs.json                   # 웹앱 작업 히스토리
+├── build/                      # CLI 변환 결과 (extract_mp3 / replace_audio 기본 출력, gitignore)
+├── backing_models/             # 백코러스 분리 모델 가중치 캐시 (자동 다운로드, gitignore)
+├── uploads/<작업ID>/           # 웹앱 업로드 원본 (gitignore)
+├── separated/<작업ID>/         # 웹앱 분리 결과 (gitignore)
+└── jobs.json                   # 웹앱 작업 히스토리 (gitignore)
 ```
 
 > 한글·특수문자 파일명이 ffmpeg·Demucs·Windows 경로 처리에서 인코딩 문제를
