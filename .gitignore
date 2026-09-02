@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- 가상환경 ---
+venv/
+.venv/
+env/
+
+# --- 모델 가중치 (실행 시 자동 다운로드, 수백 MB~) ---
+backing_models/
+
+# --- 웹앱 런타임 데이터 ---
+uploads/
+separated/
+jobs.json
+
+# --- 입력/출력 미디어 (샘플/작업물, 리포에 넣지 않음) ---
+original/
+build/
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.flac
+*.ogg
+*.aac
+*.mov
+*.mkv
+*.avi
+*.webm
+*.wmv
+*.mid
+*.midi
+*.musicxml
+
+# --- OS / 에디터 ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

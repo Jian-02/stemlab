@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>음원 분리 도구</title>
+<!-- 채보(악보) 결과를 브라우저에서 바로 그려주는 라이브러리. 인터넷 연결이
+     필요하다 (안 되면 악보 미리보기만 안 뜨고, MIDI/MusicXML 다운로드는 그대로 됨). -->
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1/build/opensheetmusicdisplay.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --border: #e3e6ee;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --ok: #16a34a;
+    --error: #dc2626;
+    --track-bg: #eef0f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 16px 80px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 14px; color: var(--muted); font-weight: 600; }
+  label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--muted); }
+  select, input[type="file"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fff;
+    margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #b6b9c9; cursor: not-allowed; }
+  .job {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .job-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; margin-bottom: 6px;
+  }
+  .job-name { font-weight: 600; font-size: 14px; word-break: break-all; }
+  .job-meta { font-size: 12px; color: var(--muted); }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.queued { background: #f1f2f8; color: var(--muted); }
+  .badge.processing { background: #eef2ff; color: var(--accent); }
+  .badge.done { background: #ecfdf3; color: var(--ok); }
+  .badge.error { background: #fef2f2; color: var(--error); }
+  .progress-bar {
+    width: 100%; height: 8px; background: var(--track-bg);
+    border-radius: 999px; overflow: hidden; margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent); border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+  .stem-list { margin-top: 12px; }
+  .stem {
+    padding: 10px 0; border-top: 1px solid var(--border);
+  }
+  .stem:first-child { border-top: none; }
+  .stem-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .stem-label { font-size: 13px; font-weight: 600; }
+  .stem audio { width: 100%; height: 32px; }
+  .stem a {
+    font-size: 12px; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--border); padding: 5px 10px; border-radius: 6px;
+    white-space: nowrap;
+  }
+  .stem a:hover { background: var(--track-bg); }
+  .waveform {
+    width: 100%; height: 48px; display: block;
+    border-radius: 6px; background: #f8f9fc; cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .waveform-legend {
+    font-size: 11px; color: var(--muted); margin: 2px 0 12px;
+    display: flex; gap: 14px;
+  }
+  .waveform-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .hint {
+    font-size: 12px; color: var(--muted); margin: -6px 0 14px;
+    background: #f8f9fc; border-radius: 6px; padding: 8px 10px;
+  }
+  .stem-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+  .backing-split { display: flex; gap: 8px; align-items: center; }
+  .backing-split select {
+    flex: 0 0 auto; width: auto; margin-bottom: 0; padding: 6px 8px; font-size: 12px;
+  }
+  .stem-actions button {
+    padding: 6px 10px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .notation-actions { display: flex; gap: 10px; margin-bottom: 12px; }
+  .notation-actions a {
+    font-size: 12px; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px;
+    white-space: nowrap;
+  }
+  .notation-actions a:hover { background: var(--track-bg); }
+  .osmd-container .empty { padding: 12px 0; text-align: center; }
+  /* A4 용지 비율(210:297)의 고정 프레임 안에, 페이지들을 옆으로 슬라이드해서
+     한 번에 한 페이지씩 보여준다. (전체를 한 번에 이어붙여서 그리면 너무
+     길고 지저분해 보여서, 실제 악보책처럼 페이지 단위로 넘기게 만들었다.) */
+  .osmd-page-frame {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    aspect-ratio: 210 / 297;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .osmd-pages-track {
+    display: flex;
+    height: 100%;
+    transition: transform 0.25s ease;
+  }
+  .osmd-page {
+    flex: 0 0 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 14px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .osmd-page svg { width: 100%; height: auto; }
+  .osmd-pager {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin-top: 10px;
+  }
+  .osmd-pager button {
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+  }
+  .osmd-pager button:disabled { background: #b6b9c9; cursor: not-allowed; }
+  .osmd-page-indicator { font-size: 12px; color: var(--muted); min-width: 46px; text-align: center; }
+  .error-box {
+    margin-top: 8px; font-size: 12px; color: var(--error);
+    background: #fef2f2; padding: 8px 10px; border-radius: 6px;
+    white-space: pre-wrap; max-height: 140px; overflow-y: auto;
+  }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎵 음원 분리 도구</h1>
+  <div class="subtitle">mp3 / mp4 파일을 업로드하면 악기별 트랙으로 분리해 드립니다 (Demucs 기반, 로컬 실행).</div>
+
+  <div class="card">
+    <h2>새 작업</h2>
+    <form id="upload-form">
+      <label for="file">오디오/비디오 파일</label>
+      <input type="file" id="file" name="file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,.mp4,.mov,.mkv,.avi,.webm,.wmv" required>
+
+      <div class="row">
+        <div>
+          <label for="mode">분리 모드</label>
+          <select id="mode" name="mode">
+            {% for key, opt in mode_options.items() %}
+            <option value="{{ key }}">{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="output_format">출력 형식</label>
+          <select id="output_format" name="output_format">
+            <option value="mp3">mp3 (용량 작음, 320kbps)</option>
+            <option value="wav">wav (무손실, 용량 큼)</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" id="submit-btn">업로드하고 분리 시작</button>
+    </form>
+    <div class="hint">
+      ※ 6-스템 모드의 피아노(및 기타) 분리는 Demucs 모델 자체의 한계로 정확도가
+      낮을 수 있습니다 (학습 데이터 부족). 일반 4악기(보컬/드럼/베이스/그 외)
+      품질을 높이고 싶다면 "4-스템 고품질" 옵션을 사용해 보세요.
+      <br>
+      ※ "백코러스/하모니 분리" 모드는 반주가 섞여 있으면 안 되고, 이미 보컬만
+      분리된 파일을 넣어야 합니다. 아래 작업 목록에서 완료된 보컬 스템 옆의
+      "백코러스/하모니 분리" 버튼을 누르면 다시 업로드하지 않고도 바로
+      추가로 나눌 수 있어요. 리드 보컬과 백코러스가 같은 목소리라 반주 분리보다
+      어려운 작업이라, 곡에 따라 결과 품질 차이가 클 수 있습니다.
+      <br>
+      ※ "보컬 멜로디 악보로 만들기"는 자동 채보(AI가 음을 듣고 악보로 옮기는 것)라
+      완벽하지 않습니다. 비브라토나 빠른 구간, 랩처럼 말하듯 부르는 부분은
+      음정/박자가 틀릴 수 있어요. 결과는 "초안"으로 보고 직접 다듬는 걸 추천합니다.
+      마찬가지로 완료된 보컬 스템 옆의 "🎼 악보로 만들기" 버튼으로 바로 만들 수
+      있고, 화음이 있는 피아노/기타 반주에는 잘 안 맞습니다. (설치 시 주의:
+      requirements-transcribe.txt로 먼저 설치한 다음, basic-pitch는
+      "pip install --no-deps basic-pitch"로 따로 설치해야 합니다 —
+      그냥 설치하면 다른 기능과 충돌나는 tensorflow까지 같이 딸려옵니다.
+      자세한 설명은 requirements.txt 주석 참고.)
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>작업 목록</h2>
+    <div id="job-list"><div class="empty">불러오는 중…</div></div>
+  </div>
+</div>
+
+<script>
+const jobListEl = document.getElementById('job-list');
+const form = document.getElementById('upload-form');
+const submitBtn = document.getElementById('submit-btn');
+const jobStates = {}; // job.id -> 마지막으로 그렸을 때의 status (재생 중인 <audio>를 지키기 위한 추적용)
+const MODE_OPTIONS = {{ mode_options_json | safe }}; // 서버의 MODE_OPTIONS를 그대로 JS에서도 사용
+
+// "vocals" 또는 "lead_vocal" 스템 옆에 붙일 "백코러스/하모니 분리" 미니 폼.
+// (이미 나온 백코러스 스템에서 또 나누는 건 의미가 없으니 backing_vocal 스템에는 안 붙인다)
+function backingSplitControls(jobId, filename) {
+  const presets = Object.entries(MODE_OPTIONS).filter(([, opt]) => opt.engine === 'backing');
+  if (!presets.length) return '';
+  const optionsHtml = presets.map(([key, opt]) => {
+    const shortLabel = opt.label.replace('백코러스/하모니 분리 - ', '').replace(' (이미 보컬만 있는 파일 전용)', '');
+    return `<option value="${key}">${shortLabel}</option>`;
+  }).join('');
+  return `
+    <div class="backing-split">
+      <select class="backing-preset">${optionsHtml}</select>
+      <button type="button" class="backing-split-btn" data-job="${jobId}" data-file="${encodeURIComponent(filename)}">🎤 백코러스/하모니 분리</button>
+    </div>
+  `;
+}
+
+// "vocals" 또는 "lead_vocal" 스템 옆에 붙일 "악보로 만들기" 버튼.
+function transcribeControls(jobId, filename) {
+  if (!MODE_OPTIONS.transcribe_vocal) return '';
+  return `<button type="button" class="transcribe-btn" data-job="${jobId}" data-file="${encodeURIComponent(filename)}">🎼 악보로 만들기</button>`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function statusLabel(status) {
+  return { queued: '대기 중', processing: '분리 중', done: '완료', error: '오류' }[status] || status;
+}
+
+function renderJobBody(job) {
+  if (job.status === 'processing' || job.status === 'queued') {
+    return `<div class="progress-bar"><div class="progress-fill" style="width:${job.progress || 0}%"></div></div>`;
+  }
+  if (job.status === 'done' && job.mode === 'transcribe_vocal') {
+    return renderTranscribeBody(job);
+  }
+  if (job.status === 'done') {
+    const legend = `
+      <div class="waveform-legend">
+        <span><span class="legend-dot" style="background:#4338ca"></span>소리 있음(재생됨)</span>
+        <span><span class="legend-dot" style="background:#a5b4fc"></span>소리 있음(재생 전)</span>
+        <span><span class="legend-dot" style="background:#c3c7d9"></span>정적/무음</span>
+      </div>`;
+    return legend + '<div class="stem-list">' + job.stems.map(s => {
+      const url = `/files/${job.id}/${encodeURIComponent(s.filename)}`;
+      // 보컬 계열 스템(원본 4/6스템의 "vocals", 백코러스 분리 결과의 "lead_vocal")에만
+      // 추가로 리드/백코러스를 나누거나 악보로 만드는 버튼을 붙인다.
+      const isVocalLike = s.key === 'vocals' || s.key === 'lead_vocal';
+      return `
+      <div class="stem">
+        <div class="stem-top">
+          <div class="stem-label">${s.label}</div>
+          <a href="${url}" download>다운로드</a>
+        </div>
+        <canvas class="waveform" width="640" height="48" title="클릭하면 그 위치로 이동합니다"></canvas>
+        <audio controls preload="metadata" src="${url}"></audio>
+        ${isVocalLike ? `<div class="stem-actions">${backingSplitControls(job.id, s.filename)}${transcribeControls(job.id, s.filename)}</div>` : ''}
+      </div>
+    `;
+    }).join('') + '</div>';
+  }
+  if (job.status === 'error') {
+    return `<div class="error-box">${(job.error || '알 수 없는 오류').slice(-800)}</div>`;
+  }
+  return '';
+}
+
+// 자동 채보(악보 만들기) 결과 화면: 다운로드 링크 + A4 페이지 프레임 안에서
+// 옆으로 넘겨보는 오선보 뷰어.
+function renderTranscribeBody(job) {
+  if (!job.notation) {
+    return '<div class="error-box">결과 정보를 찾을 수 없습니다.</div>';
+  }
+  const xmlUrl = `/files/${job.id}/${encodeURIComponent(job.notation.musicxml_filename)}`;
+  const midiUrl = `/files/${job.id}/${encodeURIComponent(job.notation.midi_filename)}`;
+  return `
+    <div class="notation-actions">
+      <a href="${xmlUrl}" download>MusicXML 다운로드</a>
+      <a href="${midiUrl}" download>MIDI 다운로드</a>
+    </div>
+    <div class="osmd-container" data-xml-url="${xmlUrl}">
+      <div class="osmd-page-frame">
+        <div class="osmd-pages-track"><div class="osmd-page"><div class="empty">악보 그리는 중…</div></div></div>
+      </div>
+      <div class="osmd-pager" hidden>
+        <button type="button" class="osmd-prev">◀ 이전</button>
+        <span class="osmd-page-indicator">1 / 1</span>
+        <button type="button" class="osmd-next">다음 ▶</button>
+      </div>
+    </div>
+  `;
+}
+
+// OSMD(브라우저용 오선보 렌더러)로 MusicXML을 A4 페이지 단위로 그린다.
+// 전체를 이어붙인 긴 한 줄로 그리면 지저분해 보여서, A4 비율 프레임 하나에
+// 한 페이지씩만 보여주고 좌우 버튼으로 넘기는 방식으로 만들었다.
+// 실제 렌더링은 화면 밖 보이지 않는 임시 컨테이너에서 다 끝낸 뒤(완료되면
+// 한 번에), 페이지별로 잘라서 프레임 안에 넣는다 — 그리는 중간 과정이
+// 화면에 보이지 않게 하기 위함.
+function initNotation(container) {
+  const osmdEl = container.querySelector('.osmd-container');
+  if (!osmdEl || osmdEl.dataset.osmdInit) return;
+  osmdEl.dataset.osmdInit = '1';
+  const xmlUrl = osmdEl.dataset.xmlUrl;
+  const frame = osmdEl.querySelector('.osmd-page-frame');
+  const track = osmdEl.querySelector('.osmd-pages-track');
+  const pager = osmdEl.querySelector('.osmd-pager');
+
+  function showError(msg) {
+    track.innerHTML = `<div class="osmd-page"><div class="empty">${msg}</div></div>`;
+  }
+
+  if (typeof opensheetmusicdisplay === 'undefined') {
+    showError('악보 렌더러를 불러오지 못했습니다 (인터넷 연결을 확인해 주세요). 위 다운로드 버튼으로 파일은 받을 수 있어요.');
+    return;
+  }
+
+  // OSMD가 실제 페이지 폭을 재도록, 눈에는 안 보이지만 프레임과 같은
+  // 너비를 가진 임시 컨테이너를 화면 밖에 만들어서 그린다.
+  const stage = document.createElement('div');
+  stage.style.position = 'absolute';
+  stage.style.left = '-99999px';
+  stage.style.top = '0';
+  stage.style.width = Math.max(300, frame.clientWidth) + 'px';
+  document.body.appendChild(stage);
+
+  const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(stage, {
+    autoResize: false,
+    drawTitle: true,
+    backend: 'svg',
+    pageFormat: 'A4_P',
+  });
+
+  fetch(xmlUrl)
+    .then(res => res.text())
+    .then(xmlText => osmd.load(xmlText))
+    .then(() => osmd.render())
+    .then(() => {
+      const pages = Array.from(stage.children);
+      if (!pages.length) {
+        showError('악보를 그릴 내용이 없습니다.');
+        return;
+      }
+      track.innerHTML = '';
+      pages.forEach(pageEl => {
+        const pageWrap = document.createElement('div');
+        pageWrap.className = 'osmd-page';
+        pageWrap.appendChild(pageEl);
+        track.appendChild(pageWrap);
+      });
+      document.body.removeChild(stage);
+
+      let current = 0;
+      const total = pages.length;
+      const indicator = osmdEl.querySelector('.osmd-page-indicator');
+      const prevBtn = osmdEl.querySelector('.osmd-prev');
+      const nextBtn = osmdEl.querySelector('.osmd-next');
+
+      function update() {
+        track.style.transform = `translateX(-${current * 100}%)`;
+        indicator.textContent = `${current + 1} / ${total}`;
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === total - 1;
+      }
+
+      if (total > 1) {
+        pager.hidden = false;
+        prevBtn.addEventListener('click', () => { if (current > 0) { current--; update(); } });
+        nextBtn.addEventListener('click', () => { if (current < total - 1) { current++; update(); } });
+      }
+      update();
+    })
+    .catch(err => {
+      if (stage.parentNode) document.body.removeChild(stage);
+      showError('악보를 불러오지 못했습니다: ' + err);
+    });
+}
+
+// ---- 파형(waveform) 시각화 ----
+// Web Audio API로 오디오를 디코딩해서 각 구간의 RMS(평균 음량)를 계산하고,
+// 캔버스에 막대 그래프로 그린다. 평균 음량이 임계값보다 낮은 구간은
+// "정적/무음"으로 보고 회색으로 표시해서 어디가 비어있는지 한눈에 보이게 한다.
+let sharedAudioCtx = null;
+function getAudioCtx() {
+  if (!sharedAudioCtx) {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioCtx;
+}
+
+const QUIET_RATIO = 0.08; // 최대 RMS 대비 이 비율 이하는 "정적"으로 간주
+
+function paintWaveform(canvas, audioEl) {
+  const peaks = canvas._peaks;
+  if (!peaks) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const mid = h / 2;
+  const maxPeak = canvas._maxPeak || 1e-6;
+  const quietCutoff = maxPeak * QUIET_RATIO;
+  const progress = audioEl.duration ? (audioEl.currentTime / audioEl.duration) : 0;
+  const progressX = Math.round(progress * w);
+
+  ctx.clearRect(0, 0, w, h);
+  for (let x = 0; x < w; x++) {
+    const v = peaks[x] / maxPeak;
+    const barH = Math.max(1, v * (h - 6));
+    const played = x <= progressX;
+    const isQuiet = peaks[x] <= quietCutoff;
+    ctx.fillStyle = isQuiet ? (played ? '#c3c7d9' : '#dde0ec') : (played ? '#4338ca' : '#a5b4fc');
+    ctx.fillRect(x, mid - barH / 2, 1, barH);
+  }
+  ctx.strokeStyle = '#1f2430';
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(progressX + 0.5, 0);
+  ctx.lineTo(progressX + 0.5, h);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+async function decodeWaveform(canvas, audioEl) {
+  try {
+    // 캔버스 내부 해상도를 실제 표시 폭에 맞춰서 흐릿해지지 않게 한다.
+    const displayWidth = Math.max(200, Math.round(canvas.getBoundingClientRect().width)) || 640;
+    canvas.width = displayWidth;
+
+    const resp = await fetch(audioEl.getAttribute('src'));
+    const arrayBuf = await resp.arrayBuffer();
+    const audioBuffer = await getAudioCtx().decodeAudioData(arrayBuf);
+    const raw = audioBuffer.getChannelData(0);
+
+    const buckets = canvas.width;
+    const perBucket = Math.max(1, Math.floor(raw.length / buckets));
+    const peaks = new Float32Array(buckets);
+    let maxPeak = 0;
+    for (let i = 0; i < buckets; i++) {
+      const start = i * perBucket;
+      const end = Math.min(start + perBucket, raw.length);
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += raw[j] * raw[j];
+      const rms = Math.sqrt(sum / Math.max(1, end - start));
+      peaks[i] = rms;
+      if (rms > maxPeak) maxPeak = rms;
+    }
+
+    canvas._peaks = peaks;
+    canvas._maxPeak = maxPeak;
+    paintWaveform(canvas, audioEl);
+
+    audioEl.addEventListener('timeupdate', () => paintWaveform(canvas, audioEl));
+    audioEl.addEventListener('seeking', () => paintWaveform(canvas, audioEl));
+    audioEl.addEventListener('play', () => paintWaveform(canvas, audioEl));
+
+    canvas.addEventListener('click', (e) => {
+      if (!audioEl.duration) return;
+      const rect = canvas.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      audioEl.currentTime = frac * audioEl.duration;
+      paintWaveform(canvas, audioEl);
+    });
+  } catch (err) {
+    // 디코딩 실패(코덱 미지원, 파일이 아직 준비 안 됨 등)해도 재생 자체엔
+    // 영향 없게, 캔버스만 안내 문구로 대체하고 조용히 넘어간다.
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('파형을 불러올 수 없습니다', 8, canvas.height / 2 + 4);
+  }
+}
+
+// 완료(done) 상태로 처음 그려질 때, job 종류에 맞는 초기화(파형 디코딩 or
+// 악보 렌더링)를 한 번만 실행한다.
+function initJobMedia(container, job) {
+  if (job.mode === 'transcribe_vocal') {
+    initNotation(container);
+  } else {
+    initWaveforms(container);
+  }
+}
+
+// 완료된 작업이 화면에 새로 그려질 때(최초 렌더 or 방금 완료로 전환됐을 때)만
+// 스템별 파형 디코딩을 시작한다. data-wf-init 플래그로 중복 실행을 막는다.
+function initWaveforms(container) {
+  container.querySelectorAll('.stem').forEach(stemEl => {
+    const canvas = stemEl.querySelector('canvas.waveform');
+    const audioEl = stemEl.querySelector('audio');
+    if (!canvas || !audioEl || canvas.dataset.wfInit) return;
+    canvas.dataset.wfInit = '1';
+    decodeWaveform(canvas, audioEl);
+  });
+}
+
+function buildJobEl(job) {
+  const el = document.createElement('div');
+  el.className = 'job';
+  el.id = 'job-' + job.id;
+  el.innerHTML = `
+    <div class="job-head">
+      <div>
+        <div class="job-name">${job.original_name}</div>
+        <div class="job-meta">${job.mode_label} · ${job.output_format.toUpperCase()} · ${fmtTime(job.created_at)}</div>
+      </div>
+      <span class="badge ${job.status}" data-role="badge">${statusLabel(job.status)}${job.status==='processing' ? ' ' + (job.progress||0) + '%' : ''}</span>
+    </div>
+    <div data-role="body">${renderJobBody(job)}</div>
+  `;
+  if (job.status === 'done') {
+    initJobMedia(el, job);
+  }
+  return el;
+}
+
+// 폴링할 때마다 목록 전체를 innerHTML로 새로 그리면, 이미 재생 중이던
+// <audio> 태그까지 매번 파괴되고 새로 생성되어 소리가 끊기거나 재생이
+// 안 되는 문제가 있었다. 그래서 작업별로 DOM 노드를 유지하면서 바뀐
+// 부분(상태 배지, 진행률)만 갱신하고, 완료된 작업의 <audio>는 절대
+// 다시 그리지 않도록 바꿨다.
+function renderJobs(jobs) {
+  if (!jobs.length) {
+    jobListEl.innerHTML = '<div class="empty">아직 작업이 없습니다. 위에서 파일을 업로드해 보세요.</div>';
+    return;
+  }
+  if (jobListEl.querySelector('.empty')) {
+    jobListEl.innerHTML = '';
+  }
+
+  jobs.forEach(job => {
+    const elId = 'job-' + job.id;
+    let el = document.getElementById(elId);
+    const prevStatus = jobStates[job.id];
+
+    if (!el) {
+      el = buildJobEl(job);
+    } else {
+      const badge = el.querySelector('[data-role="badge"]');
+      badge.className = `badge ${job.status}`;
+      badge.textContent = statusLabel(job.status) + (job.status === 'processing' ? ` ${job.progress || 0}%` : '');
+
+      if (job.status === 'processing' && prevStatus === 'processing') {
+        const fill = el.querySelector('.progress-fill');
+        if (fill) fill.style.width = (job.progress || 0) + '%';
+      } else if (prevStatus !== job.status) {
+        // 상태가 실제로 바뀐 순간(대기->처리중, 처리중->완료/오류)에만 본문을 다시 그린다.
+        // 이미 'done'으로 표시했던 작업은 이 분기에 다시 들어오지 않으므로
+        // 재생 중인 오디오는 건드리지 않는다.
+        const bodyEl = el.querySelector('[data-role="body"]');
+        bodyEl.innerHTML = renderJobBody(job);
+        if (job.status === 'done') {
+          initJobMedia(bodyEl, job);
+        }
+      }
+    }
+
+    jobStates[job.id] = job.status;
+    jobListEl.appendChild(el); // 이미 존재하는 노드면 파괴 없이 위치만 옮겨서 순서를 맞춘다
+  });
+}
+
+async function refreshJobs() {
+  try {
+    const res = await fetch('/api/jobs');
+    const jobs = await res.json();
+    renderJobs(jobs);
+  } catch (e) {
+    // 네트워크 순간 오류는 조용히 무시하고 다음 폴링에서 재시도
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fileInput = document.getElementById('file');
+  if (!fileInput.files.length) return;
+
+  const formData = new FormData(form);
+  submitBtn.disabled = true;
+  submitBtn.textContent = '업로드 중…';
+
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || '업로드에 실패했습니다.');
+    } else {
+      form.reset();
+      refreshJobs();
+    }
+  } catch (err) {
+    alert('업로드 중 오류가 발생했습니다: ' + err);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '업로드하고 분리 시작';
+  }
+});
+
+// "백코러스/하모니 분리" 버튼: 다시 업로드할 필요 없이, 서버에 이미 있는
+// 스템 파일 경로를 그대로 넘겨서 새 작업을 큐에 넣는다.
+jobListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.backing-split-btn');
+  if (!btn) return;
+
+  const jobId = btn.dataset.job;
+  const filename = btn.dataset.file; // 이미 encodeURIComponent 적용됨
+  const select = btn.previousElementSibling;
+  const preset = select ? select.value : 'backing_fast';
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '요청 중…';
+
+  try {
+    const formData = new FormData();
+    formData.append('preset', preset);
+    const res = await fetch(`/api/split_backing/${jobId}/${filename}`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || '요청에 실패했습니다.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+    } else {
+      btn.textContent = '작업 목록에 추가됨 ✓';
+      refreshJobs();
+    }
+  } catch (err) {
+    alert('요청 중 오류가 발생했습니다: ' + err);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+// "🎼 악보로 만들기" 버튼: 다시 업로드할 필요 없이, 서버에 이미 있는
+// 보컬 스템 파일을 그대로 넘겨서 자동 채보 작업(새 job)을 큐에 넣는다.
+jobListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.transcribe-btn');
+  if (!btn) return;
+
+  const jobId = btn.dataset.job;
+  const filename = btn.dataset.file; // 이미 encodeURIComponent 적용됨
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '요청 중…';
+
+  try {
+    const res = await fetch(`/api/transcribe/${jobId}/${filename}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || '요청에 실패했습니다.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+    } else {
+      btn.textContent = '작업 목록에 추가됨 ✓';
+      refreshJobs();
+    }
+  } catch (err) {
+    alert('요청 중 오류가 발생했습니다: ' + err);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+refreshJobs();
+setInterval(refreshJobs, 1500);
+</script>
+</body>
+</html>

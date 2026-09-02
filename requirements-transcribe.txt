@@ -1,0 +1,25 @@
+# transcribe_vocal.py (보컬 멜로디 자동 채보 -> MIDI/MusicXML 악보)에 필요한
+# 실제 라이브러리 목록입니다. basic-pitch 자체는 일부러 여기 넣지 않았습니다
+# (bare로 설치하면 tensorflow<2.15.1 을 같이 끌고 오는데, 이게 이 프로젝트의
+# audio-separator가 요구하는 numpy>=2 와 호환이 안 되고, Windows/Python 3.12용
+# 배포판도 없어서 설치가 깨집니다).
+#
+# 그래서 설치는 이 순서로 두 번 하세요 (메인 가상환경에 그대로 설치하면
+# 됩니다 — 별도 가상환경 필요 없음):
+#
+#     pip install -r requirements-transcribe.txt
+#     pip install --no-deps basic-pitch
+#
+# basic-pitch는 tensorflow SavedModel과 별개로 ONNX 버전 모델도 이미
+# 내장하고 있어서, tensorflow 없이 onnxruntime만으로 완전히 동작합니다
+# (transcribe_vocal.py가 그 ONNX 모델 파일을 직접 가리켜서 사용합니다).
+# 아래 목록이 basic-pitch가 실제로 필요로 하는 것들(tensorflow만 빼고)입니다.
+onnxruntime
+librosa
+mir_eval
+resampy<0.4.3,>=0.2.2
+scikit-learn
+scipy
+typing-extensions
+pretty_midi
+music21
